@@ -1,1 +1,9 @@
-
+ccxt==1.60.1
+pandas==1.3.3
+numpy==1.21.2
+python-telegram-bot==20.2
+python-binance==0.7.9
+schedule==1.1.0
+ta==0.7.0
+asyncio==3.4.3
+plyer==2.0.0
