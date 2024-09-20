@@ -6,7 +6,7 @@ import requests
 import config
 from datetime import datetime, timezone
 
-interval = '1w'  # Weekly candlesticks
+interval = '15m'  # Weekly candlesticks
 
 # Initialize Bybit client
 bybit = ccxt.bybit({
@@ -27,7 +27,7 @@ def get_historical_data(symbol, interval, limit=100):
 
 # Function to get weekly open price
 def get_weekly_open_price(symbol):
-    weekly_ohlcv = bybit.fetch_ohlcv(symbol, '1w', limit=5)
+    weekly_ohlcv = bybit.fetch_ohlcv(symbol, '1d', limit=5)
     df_weekly = pd.DataFrame(weekly_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df_weekly['timestamp'] = pd.to_datetime(df_weekly['timestamp'], unit='ms')
     df_weekly.set_index('timestamp', inplace=True)
@@ -96,7 +96,7 @@ async def main():
                 print(f"Error processing {symbol}: {e}")
 
         # Sleep for a week (7 days) before checking again
-        await asyncio.sleep(604800)  # Sleep for 1 week (in seconds)
+        await asyncio.sleep(900)  # Sleep for 1 week (in seconds)
 
 # Use nest_asyncio to allow running asyncio in Jupyter notebooks
 nest_asyncio.apply()
