@@ -42,8 +42,8 @@ def calculate_sma(df, period):
 # Function to check SMA crossover against weekly open price
 def check_sma_crossover_vs_weekly_open(df, weekly_open_price, short_period=2):
     df['sma_short'] = calculate_sma(df, short_period)
-    cross_over = df['sma_short'].iloc[-3] < weekly_open_price and df['sma_short'].iloc[-2] > weekly_open_price
-    cross_under = df['sma_short'].iloc[-3] > weekly_open_price and df['sma_short'].iloc[-2] < weekly_open_price
+    cross_over = df['sma_short'].iloc[-3] < weekly_open_price*1.1 and df['sma_short'].iloc[-2] > weekly_open_price*1.1
+    cross_under = df['sma_short'].iloc[-3] > weekly_open_price*0.9 and df['sma_short'].iloc[-2] < weekly_open_price*0.9
     return cross_over, cross_under
 
 # Function to send a message to 3commas using a webhook
