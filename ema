@@ -67,7 +67,7 @@ def send_3commas_message(symbol, action, close_price):
             "tv_exchange": "BYBIT",  # Update to "BYBIT" for the exchange
             "tv_instrument": symbol.replace('/', '') + '.P',  # Adjust format as needed
             "action": action,
-            "bot_uuid": "3054d7a6-d6ac-4e32-9abb-1f92ca1fa837"  # Ensure this is correct
+            "bot_uuid": "7b3958e9-9ef7-4966-a942-350fca7f6a8b"  # Ensure this is correct
         }
         # Print the payload for debugging
         #print(f"Payload for {symbol} ({action}): {payload}")
