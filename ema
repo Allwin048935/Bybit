@@ -64,8 +64,8 @@ def send_3commas_message(symbol, action, close_price):
             "max_lag": "300",
             "timestamp": timestamp,
             "trigger_price": str(close_price),
-            "tv_exchange": "BYBIT",  # Update to "BYBIT" for the exchange
-            "tv_instrument": symbol.replace('/', '') + 'USDT.SWAP',  # Adjust format as needed
+            "tv_exchange": "Bybit",  # Update to "BYBIT" for the exchange
+            "tv_instrument": symbol.replace('/', '') + 'SWAP',  # Adjust format as needed
             "action": action,
             "bot_uuid": "7b3958e9-9ef7-4966-a942-350fca7f6a8b"  # Ensure this is correct
         }
