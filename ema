@@ -1,0 +1,114 @@
+import ccxt
+import pandas as pd
+import asyncio
+import nest_asyncio
+import requests
+import config  # Import the config module
+import ta  # Import the ta library
+from datetime import datetime, timezone
+
+interval = '1d'  # 2-hour candlesticks
+short_period = 5  # Short EMA period
+long_period = 10  # Long EMA period
+
+# Initialize Bybit client
+bybit = ccxt.bybit({
+    'apiKey': config.API_KEY,
+    'secret': config.API_SECRET,
+})
+
+# Dictionary to store the last alert messages for each symbol
+last_alert_messages = {}
+
+# Function to get historical candlestick data
+def get_historical_data(symbol, interval, limit=50):
+    ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
+    return df
+
+# Function to calculate EMA using the ta library
+def calculate_ema(df, period):
+    ema = ta.trend.EMAIndicator(df['close'], window=period)
+    return ema.ema_indicator()
+
+# Function to check EMA crossover
+def check_ema_crossover(df, short_period=5, long_period=10):
+    df['ema_short'] = calculate_ema(df, short_period)
+    df['ema_long'] = calculate_ema(df, long_period)
+    
+    # Crossover conditions
+    cross_over = df['ema_short'].iloc[-2] >= df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] <= df['ema_long'].iloc[-3]
+    cross_under = df['ema_short'].iloc[-2] <= df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] >= df['ema_long'].iloc[-3]
+    
+    return cross_over, cross_under
+
+# Function to print the latest EMA values with symbol name
+def print_latest_ema_values(df, symbol, short_period, long_period):
+    latest_short_ema = df['ema_short'].iloc[-2]
+    latest_long_ema = df['ema_long'].iloc[-2]
+    
+    # print(f"Symbol: {symbol}")
+    # print(f"Latest Short EMA ({short_period} periods): {latest_short_ema}")
+    # print(f"Latest Long EMA ({long_period} periods): {latest_long_ema}")
+
+# Function to send a message to 3commas using a webhook
+def send_3commas_message(symbol, action, close_price):
+    # Check if the current message is the same as the previous one for this symbol
+    if last_alert_messages.get(symbol) != action:
+        # Prepare payload based on the action
+        timestamp = datetime.now(timezone.utc).isoformat()  # ISO 8601 format
+        payload = {
+            "secret": config.SECRET,  # Ensure you have set this in your config module
+            "max_lag": "300",
+            "timestamp": timestamp,
+            "trigger_price": str(close_price),
+            "tv_exchange": "BYBIT",  # Update to "BYBIT" for the exchange
+            "tv_instrument": symbol.replace('/', '') + '.P',  # Adjust format as needed
+            "action": action,
+            "bot_uuid": "3054d7a6-d6ac-4e32-9abb-1f92ca1fa837"  # Ensure this is correct
+        }
+        # Print the payload for debugging
+        #print(f"Payload for {symbol} ({action}): {payload}")
+
+        url = config.THREE_COMMAS_WEBHOOK_URL  # Ensure you have set this in your config module
+        response = requests.post(url, json=payload)
+        
+        if response.status_code == 200:
+            print(f"Successfully sent alert for {symbol} with action {action}")
+            # Update the last alert message for this symbol
+            last_alert_messages[symbol] = action
+        else:
+            print(f"Failed to send alert for {symbol}: {response.content}")
+
+# Main function (now defined as async)
+async def main():
+    while True:
+        for symbol in config.SELECTED_SYMBOLS:  # Ensure you have set this in your config module
+            try:
+                # Fetch historical data only once per symbol
+                historical_data = get_historical_data(symbol, interval)
+                
+                cross_over, cross_under = check_ema_crossover(historical_data, short_period, long_period)
+                print_latest_ema_values(historical_data, symbol, short_period, long_period)  # Print latest EMA values
+
+                close_price = historical_data['close'].iloc[-1]
+
+                # Determine the action based on EMA crossover
+                if cross_over:
+                    send_3commas_message(symbol, "enter_long", close_price)
+                elif cross_under:
+                    send_3commas_message(symbol, "enter_short", close_price)
+
+            except Exception as e:
+                print(f"Error processing {symbol}: {e}")
+
+        # Sleep for a specified interval before checking again
+        await asyncio.sleep(300)  # 1 minute
+
+# Use nest_asyncio to allow running asyncio in Jupyter notebooks
+nest_asyncio.apply()
+
+# Create and run the event loop
+asyncio.run(main())
