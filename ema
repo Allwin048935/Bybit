@@ -40,8 +40,8 @@ def check_ema_crossover(df, short_period=20, long_period=200):
 
 
     # Check crossover conditions
-    cross_over = df['ema_short'].iloc[-2] > df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] <= df['ema_long'].iloc[-3]  # 5 EMA crosses above 200 EMA
-    cross_under = df['ema_short'].iloc[-2] < df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] >= df['ema_long'].iloc[-3]  # 5 EMA crosses below 200 EMA
+    cross_over = df['ema_short'].iloc[-2] > df['ema_long'].iloc[-2] #and df['ema_short'].iloc[-3] <= df['ema_long'].iloc[-3]  # 5 EMA crosses above 200 EMA
+    cross_under = df['ema_short'].iloc[-2] < df['ema_long'].iloc[-2] #and df['ema_short'].iloc[-3] >= df['ema_long'].iloc[-3]  # 5 EMA crosses below 200 EMA
     
     return cross_over, cross_under
 
