@@ -1,1 +1,136 @@
-u
+import ccxt
+import pandas as pd
+import asyncio
+import nest_asyncio
+import requests
+import config2  # Updated to config2
+from datetime import datetime, timezone
+
+interval = '5m'  # Time interval for candlesticks
+
+# Initialize bybit client
+bybit = ccxt.bybit({
+    'apiKey': config2.API_KEY,  # Updated to config2
+    'secret': config2.API_SECRET,  # Updated to config2
+})
+
+# Dictionary to store the last alert messages for each symbol
+last_alert_messages = {}
+
+# Function to get historical candlestick data
+def get_historical_data(symbol, interval, limit=500):
+    ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
+    return df
+
+# Function to calculate EMA
+def calculate_ema(df, period):
+    return df['close'].ewm(span=period, adjust=False).mean()
+
+# Function to check EMA crossover for 5-period and 200-period EMAs
+def check_ema_crossover(df, short_period=20, long_period=200):
+    # Calculate short-term and long-term EMAs
+    df['ema_short'] = calculate_ema(df, short_period)
+    df['ema_long'] = calculate_ema(df, long_period)
+
+    #Print the most recent EMA values for both short and long periods
+    print(f"EMA Short (Period {short_period}): {df['ema_short'].iloc[-2]} | EMA Long (Period {long_period}): {df['ema_long'].iloc[-2]}")
+
+
+    # Check crossover conditions
+    cross_over = df['ema_short'].iloc[-2] > df['ema_long'].iloc[-2] #and df['ema_short'].iloc[-3] <= df['ema_long'].iloc[-3]  # 5 EMA crosses above 200 EMA
+    cross_under = df['ema_short'].iloc[-2] < df['ema_long'].iloc[-2] #and df['ema_short'].iloc[-3] >= df['ema_long'].iloc[-3]  # 5 EMA crosses below 200 EMA
+    
+    return cross_over, cross_under
+
+# Function to get amplitude ratio for today and yesterday
+def get_amplitude_ratio(symbol):
+    # Fetch 1-day candlesticks, limit to 5 (current and previous 4 days)
+    daily_ohlcv = bybit.fetch_ohlcv(symbol, '1d', limit=5)
+    df_daily = pd.DataFrame(daily_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df_daily['timestamp'] = pd.to_datetime(df_daily['timestamp'], unit='ms')
+    df_daily.set_index('timestamp', inplace=True)
+
+    # Get today's and yesterday's amplitude
+    today_high = df_daily['high'].iloc[-1]
+    today_low = df_daily['low'].iloc[-1]
+    yesterday_high = df_daily['high'].iloc[-2]
+    yesterday_low = df_daily['low'].iloc[-2]
+
+    # Calculate amplitude ratios (high/low) for today and yesterday
+    today_amplitude_ratio = today_high / today_low
+    yesterday_amplitude_ratio = yesterday_high / yesterday_low
+
+    return today_amplitude_ratio, yesterday_amplitude_ratio
+
+# Function to send a message to 3commas using a webhook
+def send_3commas_message(symbol, action, close_price):
+    if last_alert_messages.get(symbol) != action:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        payload = {
+            "secret": config2.SECRET,  # Updated to config2
+            "max_lag": "300",
+            "timestamp": timestamp,
+            "trigger_price": str(close_price),
+            "tv_exchange": "Bybit",
+            "tv_instrument": symbol.replace('/', '') + '.P',
+            "action": action,
+            "bot_uuid": "7b3958e9-9ef7-4966-a942-350fca7f6a8b"
+        }
+
+        try:
+            url = config2.THREE_COMMAS_WEBHOOK_URL  # Updated to config2
+            response = requests.post(url, json=payload)
+
+            if response.status_code == 200:
+                print(f"Successfully sent alert for {symbol} with action {action}")
+                last_alert_messages[symbol] = action
+            else:
+                print(f"Failed to send alert for {symbol}: {response.content}")
+
+        except requests.RequestException as e:
+            print(f"Error sending request for {symbol}: {e}")
+
+# Main function (now defined as async)
+async def main():
+    while True:
+        for symbol in config2.SELECTED_SYMBOLS:  # Updated to config2
+            try:
+                # Fetch historical data for each symbol (we fetch 300 candles to ensure we have enough data for the 200-period EMA)
+                historical_data = get_historical_data(symbol, interval)
+                
+                # Check for 5-period EMA crossover with 200-period EMA
+                cross_over, cross_under = check_ema_crossover(historical_data)
+
+                close_price = historical_data['close'].iloc[-1]
+
+                # Get amplitude ratios for today and yesterday
+                today_amplitude, yesterday_amplitude = get_amplitude_ratio(symbol)
+
+                # Print the amplitude ratio values
+                # print(f"Today's amplitude ratio for {symbol}: {today_amplitude}")
+                # print(f"Yesterday's amplitude ratio for {symbol}: {yesterday_amplitude}")
+
+                # Check if today's or yesterday's amplitude ratio condition is met (minimum 1.1 for 10% change)
+                if today_amplitude >= 1.10 or yesterday_amplitude >= 1.10:
+                    # Determine the action based on EMA crossover
+                    if cross_over:
+                        send_3commas_message(symbol, "enter_long", close_price)
+                    elif cross_under:
+                        send_3commas_message(symbol, "enter_short", close_price)
+                else:
+                    print(f"Amplitude condition not met for {symbol}, skipping...")
+
+            except Exception as e:
+                print(f"Error processing {symbol}: {e}")
+
+        # Sleep for a while before checking again
+        await asyncio.sleep(300)  # Sleep for 3 minutes (in seconds)
+
+# Use nest_asyncio to allow running asyncio in Jupyter notebooks
+nest_asyncio.apply()
+
+# Create and run the event loop
+asyncio.run(main())
