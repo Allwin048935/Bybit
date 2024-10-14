@@ -6,7 +6,7 @@ import requests
 import config2  # Updated to config2
 from datetime import datetime, timezone
 
-interval = '5m'  # Time interval for candlesticks
+interval = '1d'  # Time interval for candlesticks
 
 # Initialize bybit client
 bybit = ccxt.bybit({
@@ -16,9 +16,10 @@ bybit = ccxt.bybit({
 
 # Dictionary to store the last alert messages for each symbol
 last_alert_messages = {}
+position_status = {}  # Dictionary to store the position status (long, short, or none) for each symbol
 
 # Function to get historical candlestick data
-def get_historical_data(symbol, interval, limit=500):
+def get_historical_data(symbol, interval, limit=50):
     ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -29,41 +30,21 @@ def get_historical_data(symbol, interval, limit=500):
 def calculate_ema(df, period):
     return df['close'].ewm(span=period, adjust=False).mean()
 
-# Function to check EMA crossover for 5-period and 200-period EMAs
-def check_ema_crossover(df, short_period=20, long_period=200):
+# Function to check EMA crossover and exit conditions
+def check_ema_conditions(df, short_period=2, long_period=20):
     # Calculate short-term and long-term EMAs
     df['ema_short'] = calculate_ema(df, short_period)
     df['ema_long'] = calculate_ema(df, long_period)
 
-    #Print the most recent EMA values for both short and long periods
-    print(f"EMA Short (Period {short_period}): {df['ema_short'].iloc[-2]} | EMA Long (Period {long_period}): {df['ema_long'].iloc[-2]}")
+    # Check for entry conditions (cross_over: enter long, cross_under: enter short)
+    cross_over = df['ema_short'].iloc[-1] > df['ema_long'].iloc[-1] and df['ema_short'].iloc[-2] <= df['ema_long'].iloc[-2]
+    cross_under = df['ema_short'].iloc[-1] < df['ema_long'].iloc[-1] and df['ema_short'].iloc[-2] >= df['ema_long'].iloc[-2]
 
+    # Check for exit conditions (exit_long: exit long, exit_short: exit short)
+    exit_long = df['ema_short'].iloc[-1] < df['ema_long'].iloc[-1]  # Exit long if short EMA drops below long EMA
+    exit_short = df['ema_short'].iloc[-1] > df['ema_long'].iloc[-1]  # Exit short if short EMA rises above long EMA
 
-    # Check crossover conditions
-    cross_over = df['ema_short'].iloc[-2] > df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] <= df['ema_long'].iloc[-3]  # 5 EMA crosses above 200 EMA
-    cross_under = df['ema_short'].iloc[-2] < df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] >= df['ema_long'].iloc[-3]  # 5 EMA crosses below 200 EMA
-    
-    return cross_over, cross_under
-
-# Function to get amplitude ratio for today and yesterday
-def get_amplitude_ratio(symbol):
-    # Fetch 1-day candlesticks, limit to 5 (current and previous 4 days)
-    daily_ohlcv = bybit.fetch_ohlcv(symbol, '1d', limit=5)
-    df_daily = pd.DataFrame(daily_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-    df_daily['timestamp'] = pd.to_datetime(df_daily['timestamp'], unit='ms')
-    df_daily.set_index('timestamp', inplace=True)
-
-    # Get today's and yesterday's amplitude
-    today_high = df_daily['high'].iloc[-1]
-    today_low = df_daily['low'].iloc[-1]
-    yesterday_high = df_daily['high'].iloc[-2]
-    yesterday_low = df_daily['low'].iloc[-2]
-
-    # Calculate amplitude ratios (high/low) for today and yesterday
-    today_amplitude_ratio = today_high / today_low
-    yesterday_amplitude_ratio = yesterday_high / yesterday_low
-
-    return today_amplitude_ratio, yesterday_amplitude_ratio
+    return cross_over, cross_under, exit_long, exit_short
 
 # Function to send a message to 3commas using a webhook
 def send_3commas_message(symbol, action, close_price):
@@ -77,7 +58,7 @@ def send_3commas_message(symbol, action, close_price):
             "tv_exchange": "Bybit",
             "tv_instrument": symbol.replace('/', '') + '.P',
             "action": action,
-            "bot_uuid": "03b92596-8b5c-4e57-839e-6e980ba0e671"
+            "bot_uuid": "00830f96-c475-4c3e-9e38-9a4495e3b78c"
         }
 
         try:
@@ -101,33 +82,35 @@ async def main():
                 # Fetch historical data for each symbol (we fetch 300 candles to ensure we have enough data for the 200-period EMA)
                 historical_data = get_historical_data(symbol, interval)
                 
-                # Check for 5-period EMA crossover with 200-period EMA
-                cross_over, cross_under = check_ema_crossover(historical_data)
+                # Check EMA entry and exit conditions
+                cross_over, cross_under, exit_long, exit_short = check_ema_conditions(historical_data)
 
                 close_price = historical_data['close'].iloc[-1]
 
-                # Get amplitude ratios for today and yesterday
-                today_amplitude, yesterday_amplitude = get_amplitude_ratio(symbol)
+                # Check if we're in a long, short, or no position
+                current_position = position_status.get(symbol, 'none')
 
-                # Print the amplitude ratio values
-                # print(f"Today's amplitude ratio for {symbol}: {today_amplitude}")
-                # print(f"Yesterday's amplitude ratio for {symbol}: {yesterday_amplitude}")
+                # Long entry and exit
+                if current_position == 'none' and cross_over:
+                    send_3commas_message(symbol, "enter_long", close_price)
+                    position_status[symbol] = 'long'
+                elif current_position == 'long' and exit_long:
+                    send_3commas_message(symbol, "exit_long", close_price)
+                    position_status[symbol] = 'none'
 
-                # Check if today's or yesterday's amplitude ratio condition is met (minimum 1.1 for 10% change)
-                if today_amplitude >= 1.10 or yesterday_amplitude >= 1.10:
-                    # Determine the action based on EMA crossover
-                    if cross_over:
-                        send_3commas_message(symbol, "enter_long", close_price)
-                    elif cross_under:
-                        send_3commas_message(symbol, "enter_short", close_price)
-                else:
-                    print(f"Amplitude condition not met for {symbol}, skipping...")
+                # Short entry and exit
+                if current_position == 'none' and cross_under:
+                    send_3commas_message(symbol, "enter_short", close_price)
+                    position_status[symbol] = 'short'
+                elif current_position == 'short' and exit_short:
+                    send_3commas_message(symbol, "exit_short", close_price)
+                    position_status[symbol] = 'none'
 
             except Exception as e:
                 print(f"Error processing {symbol}: {e}")
 
         # Sleep for a while before checking again
-        await asyncio.sleep(300)  # Sleep for 3 minutes (in seconds)
+        await asyncio.sleep(300)  # Sleep for 5 minutes (in seconds)
 
 # Use nest_asyncio to allow running asyncio in Jupyter notebooks
 nest_asyncio.apply()
