@@ -31,7 +31,7 @@ def calculate_ema(df, period):
     return df['close'].ewm(span=period, adjust=False).mean()
 
 # Function to check EMA crossover and exit conditions
-def check_ema_conditions(df, short_period=20, long_period=200):
+def check_ema_conditions(df, short_period=5, long_period=10):
     # Calculate short-term and long-term EMAs
     df['ema_short'] = calculate_ema(df, short_period)
     df['ema_long'] = calculate_ema(df, long_period)
