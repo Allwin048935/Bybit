@@ -6,7 +6,7 @@ import requests
 import config1  # Updated to config1
 from datetime import datetime, timezone
 
-interval = '5m'  # Time interval for candlesticks
+interval = '1d'  # Time interval for candlesticks
 
 # Initialize bybit client
 bybit = ccxt.bybit({
@@ -19,7 +19,7 @@ last_alert_messages = {}
 position_status = {}  # Dictionary to store the position status (long, short, or none) for each symbol
 
 # Function to get historical candlestick data
-def get_historical_data(symbol, interval, limit=500):
+def get_historical_data(symbol, interval, limit=50):
     ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -31,7 +31,7 @@ def calculate_ema(df, period):
     return df['close'].ewm(span=period, adjust=False).mean()
 
 # Function to check EMA crossover and exit conditions
-def check_ema_conditions(df, short_period=5, long_period=10):
+def check_ema_conditions(df, short_period=2, long_period=20):
     # Calculate short-term and long-term EMAs
     df['ema_short'] = calculate_ema(df, short_period)
     df['ema_long'] = calculate_ema(df, long_period)
