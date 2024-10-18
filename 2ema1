@@ -1,0 +1,112 @@
+import ccxt
+import pandas as pd
+import asyncio
+import nest_asyncio
+import requests
+import config1
+from datetime import datetime, timezone
+
+interval = '4h'  # 2-hour candlesticks
+
+# Initialize bybit client
+bybit = ccxt.bybit({
+    'apiKey': config1.API_KEY,
+    'secret': config1.API_SECRET,
+})
+
+# Dictionary to store the last alert messages for each symbol
+last_alert_messages = {}
+
+# Function to get historical candlestick data
+def get_historical_data(symbol, interval, limit=100):
+    ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
+    return df
+
+# Function to calculate EMA
+def calculate_ema(df, period):
+    return df['close'].ewm(span=period, adjust=False).mean()
+
+# Function to check EMA crossover
+def check_ema_crossover(df, short_period=9, long_period=21):
+    df['ema_short'] = calculate_ema(df, short_period)
+    df['ema_long'] = calculate_ema(df, long_period)
+
+    cross_over = df['ema_short'].iloc[-2] > df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] <= df['ema_long'].iloc[-3]
+    cross_under = df['ema_short'].iloc[-2] < df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] >= df['ema_long'].iloc[-3]
+    return cross_over, cross_under
+
+# Function to get amplitude ratio of the [-2] candle
+def get_amplitude_ratio(df):
+    high = df['high'].iloc[-2]
+    low = df['low'].iloc[-2]
+    amplitude_ratio = high / low
+    return amplitude_ratio
+
+# Function to send a message to 3commas using a webhook
+def send_3commas_message(symbol, action, close_price):
+    if last_alert_messages.get(symbol) != action:
+        timestamp = datetime.now(timezone.utc).isoformat()
+        payload = {
+            "secret": config1.SECRET,
+            "max_lag": "300",
+            "timestamp": timestamp,
+            "trigger_price": str(close_price),
+            "tv_exchange": "BYBIT",
+            "tv_instrument": symbol.replace('/', '') + '.P',
+            "action": action,
+            "bot_uuid": "2cb946f7-4b8e-4a76-93d8-76fd0d6900d0"
+        }
+
+        try:
+            url = config1.THREE_COMMAS_WEBHOOK_URL
+            response = requests.post(url, json=payload)
+
+            if response.status_code == 200:
+                print(f"Successfully sent alert for {symbol} with action {action}")
+                last_alert_messages[symbol] = action
+            else:
+                print(f"Failed to send alert for {symbol}: {response.content}")
+
+        except requests.RequestException as e:
+            print(f"Error sending request for {symbol}: {e}")
+
+# Main function (now defined as async)
+async def main():
+    while True:
+        for symbol in config1.SELECTED_SYMBOLS:
+            try:
+                # Fetch historical data for the symbol
+                historical_data = get_historical_data(symbol, interval)
+
+                # Check EMA crossover
+                cross_over, cross_under = check_ema_crossover(historical_data)
+
+                close_price = historical_data['close'].iloc[-1]
+
+                # Get amplitude ratio for the [-2] candle
+                amplitude_ratio = get_amplitude_ratio(historical_data)
+
+                # Check if the amplitude ratio condition is met (must be less than 3%)
+                if amplitude_ratio < 1.03:
+                    # Determine the action based on EMA crossover
+                    if cross_over:
+                        send_3commas_message(symbol, "enter_long", close_price)
+                    elif cross_under:
+                        send_3commas_message(symbol, "enter_short", close_price)
+                else:
+                    print(f"Amplitude condition not met for {symbol}, skipping...")
+
+            except Exception as e:
+                print(f"Error processing {symbol}: {e}")
+
+        # Sleep for a while before checking again
+        await asyncio.sleep(300)  # Sleep for 5 minutes (in seconds)
+
+# Use nest_asyncio to allow running asyncio in Jupyter notebooks
+nest_asyncio.apply()
+
+# Create and run the event loop
+asyncio.run(main())
