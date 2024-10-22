@@ -71,7 +71,7 @@ def send_3commas_message(symbol, action, close_price, bot_uuid):
             "max_lag": "300",
             "timestamp": timestamp,
             "trigger_price": str(close_price),
-            "tv_exchange": "bybit",
+            "tv_exchange": "Bybit",
             "tv_instrument": symbol.replace('/', '') + '.P',
             "action": action,
             "bot_uuid": bot_uuid  # Pass the bot UUID as a parameter
