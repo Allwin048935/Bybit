@@ -3,15 +3,15 @@ import pandas as pd
 import asyncio
 import nest_asyncio
 import requests
-import config2
+import config
 from datetime import datetime, timezone
 
 interval = '5m' 
 
 # Initialize bybit client
 bybit = ccxt.bybit({
-    'apiKey': config2.API_KEY,
-    'secret': config2.API_SECRET,
+    'apiKey': config.API_KEY,
+    'secret': config.API_SECRET,
 })
 
 # Dictionary to store the last alert messages for each symbol
@@ -78,7 +78,7 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
         }
 
         try:
-            url = config2.THREE_COMMAS_WEBHOOK_URL
+            url = config.THREE_COMMAS_WEBHOOK_URL
             response = requests.post(url, json=payload)
 
             if response.status_code == 200:
@@ -93,7 +93,7 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
 # Main function (now defined as async)
 async def main():
     while True:
-        for symbol in config2.SELECTED_SYMBOLS:
+        for symbol in config.SELECTED_SYMBOLS:
             try:
                 # Fetch historical data and day open price only once per symbol
                 historical_data = get_historical_data(symbol, interval)
@@ -113,14 +113,14 @@ async def main():
                     # Determine the action based on SMA crossover compared to day open price
                     if cross_over:
                         # Send alert to the first bot
-                        send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config2.SECRET_1)
+                        send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_1)
                         # Send alert to the second bot
-                        send_3commas_message(symbol, "enter_long", close_price, "03b92596-8b5c-4e57-839e-6e980ba0e671", config2.SECRET_2)
+                        send_3commas_message(symbol, "enter_long", close_price, "03b92596-8b5c-4e57-839e-6e980ba0e671", config.SECRET_2)
                     elif cross_under:
                         # Send alert to the first bot
-                        send_3commas_message(symbol, "enter_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config2.SECRET_1)
+                        send_3commas_message(symbol, "enter_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_1)
                         # Send alert to the second bot
-                        send_3commas_message(symbol, "enter_short", close_price, "03b92596-8b5c-4e57-839e-6e980ba0e671", config2.SECRET_2)
+                        send_3commas_message(symbol, "enter_short", close_price, "03b92596-8b5c-4e57-839e-6e980ba0e671", config.SECRET_2)
                 else:
                     print(f"Amplitude condition not met for {symbol}, skipping...")
 
@@ -132,3 +132,6 @@ async def main():
 
 # Use nest_asyncio to allow running asyncio in Jupyter notebooks
 nest_asyncio.apply()
+
+# Create and run the event loop
+asyncio.run(main())
