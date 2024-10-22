@@ -6,7 +6,7 @@ import requests
 import config
 from datetime import datetime, timezone
 
-interval = '2h'  # 2-hour candlesticks
+interval = '5m'  # 2-hour candlesticks
 
 # Initialize bybit client
 bybit = ccxt.bybit({
@@ -27,7 +27,7 @@ def get_historical_data(symbol, interval, limit=20):
 
 # Function to get day open price
 def get_day_open_price(symbol):
-    day_ohlcv = bybit.fetch_ohlcv(symbol, '1w', limit=3)
+    day_ohlcv = bybit.fetch_ohlcv(symbol, '1d', limit=3)
     df_day = pd.DataFrame(day_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df_day['timestamp'] = pd.to_datetime(df_day['timestamp'], unit='ms')
     df_day.set_index('timestamp', inplace=True)
@@ -49,7 +49,7 @@ def check_sma_crossover_vs_day_open(df, day_open_price, short_period=2):
 # Function to get previous day's amplitude ratio
 def get_previous_day_amplitude(symbol):
     # Fetch 1-day candlesticks, limit to 2 (current and previous days)
-    daily_ohlcv = bybit.fetch_ohlcv(symbol, '1w', limit=5)
+    daily_ohlcv = bybit.fetch_ohlcv(symbol, '1d', limit=5)
     df_daily = pd.DataFrame(daily_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df_daily['timestamp'] = pd.to_datetime(df_daily['timestamp'], unit='ms')
     df_daily.set_index('timestamp', inplace=True)
@@ -109,7 +109,7 @@ async def main():
                 print(f"Amplitude ratio for {symbol}: {amplitude_ratio}")
 
                 # Check if the amplitude ratio condition is met (minimum 1.1 for 10% change)
-                if amplitude_ratio >= 1.08:
+                if amplitude_ratio >= 1.25:
                     # Determine the action based on SMA crossover compared to day open price
                     if cross_over:
                         send_3commas_message(symbol, "enter_long", close_price)
