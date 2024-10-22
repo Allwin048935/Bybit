@@ -74,7 +74,7 @@ def send_3commas_message(symbol, action, close_price):
             "tv_exchange": "bybit",
             "tv_instrument": symbol.replace('/', '') + '.P',
             "action": action,
-            "bot_uuid": "2cb946f7-4b8e-4a76-93d8-76fd0d6900d0"
+            "bot_uuid": "03b92596-8b5c-4e57-839e-6e980ba0e671"
         }
 
         try:
