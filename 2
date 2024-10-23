@@ -35,7 +35,6 @@ def get_day_open_price(symbol):
     df_day = pd.DataFrame(day_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df_day['timestamp'] = pd.to_datetime(df_day['timestamp'], unit='ms')
     df_day.set_index('timestamp', inplace=True)
-    # Get the open price of the latest day candle
     day_open_price = df_day['close'].iloc[-2]
     return day_open_price
 
@@ -133,6 +132,9 @@ async def main_trading():
 async def start_telegram_bot():
     application = Application.builder().token(config.TELEGRAM_TOKEN).build()
     
+    # Initialize the application (fixes the error)
+    await application.initialize()
+
     application.add_handler(CommandHandler('set_symbols', set_symbols))
     
     await application.start()
