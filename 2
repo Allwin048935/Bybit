@@ -102,7 +102,7 @@ async def set_symbols(update: Update, context) -> None:
         await update.message.reply_text("Please provide symbols. Usage: /set_symbols BTC/USDT ETH/USDT")
 
 # Main function
-async def main():
+async def main_trading():
     while True:
         for symbol in selected_symbols:
             try:
@@ -130,18 +130,24 @@ async def main():
         await asyncio.sleep(300)
 
 # Start Telegram bot
-def start_telegram_bot():
+async def start_telegram_bot():
     application = Application.builder().token(config.TELEGRAM_TOKEN).build()
     
     application.add_handler(CommandHandler('set_symbols', set_symbols))
     
-    application.run_polling()
+    await application.start()
+    await application.updater.start_polling()
 
-# Run the Telegram bot and the main trading loop concurrently
+# Main function to run both bot and trading
+async def main():
+    await asyncio.gather(
+        start_telegram_bot(),
+        main_trading()
+    )
+
+# Run the main function
 if __name__ == "__main__":
     import nest_asyncio
     nest_asyncio.apply()
-    
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(None, start_telegram_bot)
-    loop.run_until_complete(main())
+
+    asyncio.run(main())
