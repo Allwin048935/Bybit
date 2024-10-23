@@ -9,10 +9,13 @@ from telegram.ext import Application, CommandHandler
 
 interval = '1m'
 
-# Initialize bybit client
+# Initialize bybit client for derivatives (perpetuals) market
 bybit = ccxt.bybit({
     'apiKey': config.API_KEY,
     'secret': config.API_SECRET,
+    'options': {
+        'defaultType': 'future',  # Ensures we are using the derivatives market, including perpetuals
+    }
 })
 
 # Dictionary to store the last alert messages for each symbol
@@ -21,15 +24,15 @@ last_alert_messages = {}
 # List of selected symbols from Telegram (global variable)
 selected_symbols = []
 
-# Function to get historical candlestick data
+# Function to get historical candlestick data for perpetual contracts
 def get_historical_data(symbol, interval, limit=20):
     ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
-    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'close'])
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
     return df
 
-# Function to get day open price
+# Function to get day open price for perpetual contracts
 def get_day_open_price(symbol):
     day_ohlcv = bybit.fetch_ohlcv(symbol, '1d', limit=3)
     df_day = pd.DataFrame(day_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -44,12 +47,12 @@ def calculate_sma(df, period):
 
 # Function to check SMA crossover against day open price
 def check_sma_crossover_vs_day_open(df, day_open_price, short_period=2):
-    df['sma_short'] = calculate_sma(df, short_period)
+    df['sma_short'] = calculate_sma(df, short_period).squeeze()  # Ensure it's a single column (Series)
     cross_over = df['sma_short'].iloc[-2] > day_open_price
     cross_under = df['sma_short'].iloc[-2] < day_open_price
     return cross_over, cross_under
 
-# Function to get previous day's amplitude ratio
+# Function to get previous day's amplitude ratio for perpetual contracts
 def get_previous_day_amplitude(symbol):
     daily_ohlcv = bybit.fetch_ohlcv(symbol, '1d', limit=5)
     df_daily = pd.DataFrame(daily_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -72,7 +75,7 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
             "timestamp": timestamp,
             "trigger_price": str(close_price),
             "tv_exchange": "bybit",
-            "tv_instrument": symbol.replace('/', '') + '.P',
+            "tv_instrument": symbol.replace('/', '') + '.P',  # Adjust for perpetual contracts
             "action": action,
             "bot_uuid": bot_uuid
         }
@@ -90,18 +93,18 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
         except requests.RequestException as e:
             print(f"Error sending request for {symbol} to bot {bot_uuid}: {e}")
 
-# Telegram bot command to set symbols
+# Telegram bot command to set symbols (for perpetual contracts)
 async def set_symbols(update: Update, context) -> None:
     global selected_symbols
     user_symbols = context.args
 
     if user_symbols:
-        # Add each symbol, avoiding duplicates
-        new_symbols = [symbol.upper() for symbol in user_symbols if symbol.upper() not in selected_symbols]
+        # Add each symbol, appending :USDT to indicate perpetual contracts, avoiding duplicates
+        new_symbols = [symbol.upper() + ':USDT' for symbol in user_symbols if (symbol.upper() + ':USDT') not in selected_symbols]
         selected_symbols.extend(new_symbols)
 
         if new_symbols:
-            await update.message.reply_text(f"Symbols updated: {', '.join(selected_symbols)}")
+            await update.message.reply_text(f"Symbols updated (perpetual): {', '.join(selected_symbols)}")
         else:
             await update.message.reply_text("All provided symbols are already in the list.")
     else:
@@ -113,7 +116,7 @@ async def reset_symbols(update: Update, context) -> None:
     selected_symbols = []
     await update.message.reply_text("Symbols have been reset.")
 
-# Main trading function
+# Main trading function for perpetual contracts
 async def main_trading():
     while True:
         for symbol in selected_symbols:
@@ -129,10 +132,10 @@ async def main_trading():
                 if amplitude_ratio >= 1.25:
                     if cross_over:
                         send_3commas_message(symbol, "enter_long", close_price, "03b92596-8b5c-4e57-839e-6e980ba0e671", config.SECRET_1)
-                        #send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_2)
+                        send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_2)
                     elif cross_under:
                         send_3commas_message(symbol, "enter_short", close_price, "03b92596-8b5c-4e57-839e-6e980ba0e671", config.SECRET_1)
-                        #send_3commas_message(symbol, "enter_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_2)
+                        send_3commas_message(symbol, "enter_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_2)
                 else:
                     print(f"Amplitude condition not met for {symbol}, skipping...")
 
