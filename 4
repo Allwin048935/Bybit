@@ -44,7 +44,7 @@ def calculate_sma(df, period):
 
 # Function to check SMA crossover against day open price
 def check_sma_crossover_vs_day_open(df, day_open_price, short_period=2):
-    df['sma_short'] = calculate_sma(df, short_period)
+    df['sma_short'] = calculate_sma(df, short_period).squeeze()  # Ensure it's a single column (Series)
     cross_over = df['sma_short'].iloc[-2] > day_open_price
     cross_under = df['sma_short'].iloc[-2] < day_open_price
     return cross_over, cross_under
