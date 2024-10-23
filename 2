@@ -9,10 +9,13 @@ from telegram.ext import Application, CommandHandler
 
 interval = '5m'
 
-# Initialize bybit client
+# Initialize bybit client for derivatives (perpetuals) market
 bybit = ccxt.bybit({
     'apiKey': config.API_KEY,
     'secret': config.API_SECRET,
+    'options': {
+        'defaultType': 'future',  # Ensures we are using the derivatives market, including perpetuals
+    }
 })
 
 # Dictionary to store the last alert messages for each symbol
@@ -21,7 +24,7 @@ last_alert_messages = {}
 # List of selected symbols from Telegram (global variable)
 selected_symbols = []
 
-# Function to get historical candlestick data
+# Function to get historical candlestick data for perpetual contracts
 def get_historical_data(symbol, interval, limit=20):
     ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'close'])
@@ -29,7 +32,7 @@ def get_historical_data(symbol, interval, limit=20):
     df.set_index('timestamp', inplace=True)
     return df
 
-# Function to get day open price
+# Function to get day open price for perpetual contracts
 def get_day_open_price(symbol):
     day_ohlcv = bybit.fetch_ohlcv(symbol, '1d', limit=3)
     df_day = pd.DataFrame(day_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -49,7 +52,7 @@ def check_sma_crossover_vs_day_open(df, day_open_price, short_period=2):
     cross_under = df['sma_short'].iloc[-2] < day_open_price
     return cross_over, cross_under
 
-# Function to get previous day's amplitude ratio
+# Function to get previous day's amplitude ratio for perpetual contracts
 def get_previous_day_amplitude(symbol):
     daily_ohlcv = bybit.fetch_ohlcv(symbol, '1d', limit=5)
     df_daily = pd.DataFrame(daily_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -72,7 +75,7 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
             "timestamp": timestamp,
             "trigger_price": str(close_price),
             "tv_exchange": "bybit",
-            "tv_instrument": symbol.replace('/', '') + '.P',
+            "tv_instrument": symbol.replace('/', '') + '.P',  # Adjust for perpetual contracts
             "action": action,
             "bot_uuid": bot_uuid
         }
@@ -90,17 +93,30 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
         except requests.RequestException as e:
             print(f"Error sending request for {symbol} to bot {bot_uuid}: {e}")
 
-# Telegram bot command to set symbols
+# Telegram bot command to set symbols (for perpetual contracts)
 async def set_symbols(update: Update, context) -> None:
     global selected_symbols
     user_symbols = context.args
-    if user_symbols:
-        selected_symbols = [symbol.upper() for symbol in user_symbols]
-        await update.message.reply_text(f"Symbols updated: {', '.join(selected_symbols)}")
-    else:
-        await update.message.reply_text("Please provide symbols. Usage: /set_symbols BTC/USDT ETH/USDT")
 
-# Main function
+    if user_symbols:
+        # Add each symbol, appending :USDT to indicate perpetual contracts, avoiding duplicates
+        new_symbols = [symbol.upper() + ':USDT' for symbol in user_symbols if (symbol.upper() + ':USDT') not in selected_symbols]
+        selected_symbols.extend(new_symbols)
+
+        if new_symbols:
+            await update.message.reply_text(f"Symbols updated (perpetual): {', '.join(selected_symbols)}")
+        else:
+            await update.message.reply_text("All provided symbols are already in the list.")
+    else:
+        await update.message.reply_text("No symbols provided. Usage: /set_symbols BTC/USDT ETH/USDT")
+
+# Command to reset symbols
+async def reset_symbols(update: Update, context) -> None:
+    global selected_symbols
+    selected_symbols = []
+    await update.message.reply_text("Symbols have been reset.")
+
+# Main trading function for perpetual contracts
 async def main_trading():
     while True:
         for symbol in selected_symbols:
@@ -132,11 +148,14 @@ async def main_trading():
 async def start_telegram_bot():
     application = Application.builder().token(config.TELEGRAM_TOKEN).build()
     
-    # Initialize the application (fixes the error)
+    # Initialize the application
     await application.initialize()
 
+    # Add handlers for setting and resetting symbols
     application.add_handler(CommandHandler('set_symbols', set_symbols))
+    application.add_handler(CommandHandler('reset_symbols', reset_symbols))
     
+    # Start polling for commands
     await application.start()
     await application.updater.start_polling()
 
