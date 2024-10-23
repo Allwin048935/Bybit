@@ -139,11 +139,11 @@ async def main_trading():
                 
                 if amplitude_ratio >= 1.25:
                     if cross_over:
-                        send_3commas_message(symbol, "enter_long", close_price, "03b92596-8b5c-4e57-839e-6e980ba0e671", config.SECRET_1)
-                        send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_2)
+                        send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_1)
+                        #send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_2)
                     elif cross_under:
-                        send_3commas_message(symbol, "enter_short", close_price, "03b92596-8b5c-4e57-839e-6e980ba0e671", config.SECRET_1)
-                        send_3commas_message(symbol, "enter_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_2)
+                        send_3commas_message(symbol, "enter_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_1)
+                        #send_3commas_message(symbol, "enter_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_2)
                 else:
                     print(f"Amplitude condition not met for {symbol}, skipping...")
 
