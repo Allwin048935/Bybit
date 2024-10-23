@@ -9,8 +9,8 @@ import config  # Import the config module
 
 interval = '1d'  # 1-day candlesticks
 
-# Initialize Binance client
-binance = ccxt.binance({
+# Initialize bybitclient
+bybit= ccxt.binance({
     'apiKey': config.API_KEY,
     'secret': config.API_SECRET,
 })
@@ -19,7 +19,7 @@ binance = ccxt.binance({
 last_alert_messages = {}
 
 # Function to get historical candlestick data
-def get_historical_data(symbol, interval, limit=100):
+def get_historical_data(symbol, interval, limit=10):
     ohlcv = binance.fetch_ohlcv(symbol, interval, limit=limit)
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -28,8 +28,8 @@ def get_historical_data(symbol, interval, limit=100):
 
 # Function to calculate amplitude ratio
 def calculate_amplitude_ratio(df):
-    prev_day_high = df['high'].iloc[-2]
-    prev_day_low = df['low'].iloc[-2]
+    prev_day_high = df['high'].iloc[-1]
+    prev_day_low = df['low'].iloc[-1]
     amplitude_ratio = prev_day_high / prev_day_low
     return amplitude_ratio
 
