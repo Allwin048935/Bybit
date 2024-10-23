@@ -1,6 +1,6 @@
 # config.py
-API_KEY = 'jcTIZOTsd1OsUOpgER'
-API_SECRET = 'IlBRdxegRqhkWFyHWs2K9omWXTuCDyLEx7a6'
+API_KEY = 'kumYhkreneOVab9rLM'
+API_SECRET = 'PBz71EMCmFqTVuh6kdSJiDtkAwkOznmdUjxk'
 SECRET_2 = 'eyJhbGciOiJIUzI1NiJ9.eyJzaWduYWxzX3NvdXJjZV9pZCI6MTAyNTR9.UpdSFm3FpcmR7hcVaBUOzPp5Q6-1gBRlQA21sH0ieHo'
 SECRET_1 = 'eyJhbGciOiJIUzI1NiJ9.eyJzaWduYWxzX3NvdXJjZV9pZCI6ODI4MzV9.ccZIwRRxe781qP0Mtlx62NIkmKyUGs155h433uxE-M0'
 THREE_COMMAS_WEBHOOK_URL = 'https://api.3commas.io/signal_bots/webhooks'
