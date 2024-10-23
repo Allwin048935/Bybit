@@ -10,7 +10,7 @@ import config3  # Import the config3 module
 interval = '1d'  # 1-day candlesticks
 
 # Initialize bybitclient
-bybit= ccxt.binance({
+bybit= ccxt.bybit({
     'apiKey': config3.API_KEY,
     'secret': config3.API_SECRET,
 })
@@ -20,7 +20,7 @@ last_alert_messages = {}
 
 # Function to get historical candlestick data
 def get_historical_data(symbol, interval, limit=10):
-    ohlcv = binance.fetch_ohlcv(symbol, interval, limit=limit)
+    ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
