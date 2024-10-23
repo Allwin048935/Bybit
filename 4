@@ -24,7 +24,7 @@ selected_symbols = []
 # Function to get historical candlestick data
 def get_historical_data(symbol, interval, limit=20):
     ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
-    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'close'])
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
     return df
@@ -44,7 +44,7 @@ def calculate_sma(df, period):
 
 # Function to check SMA crossover against day open price
 def check_sma_crossover_vs_day_open(df, day_open_price, short_period=2):
-    df['sma_short'] = calculate_sma(df, short_period).squeeze()  # Ensure it's a single column (Series)
+    df['sma_short'] = calculate_sma(df, short_period)  # Already returns a Series, so no squeeze needed
     cross_over = df['sma_short'].iloc[-2] > day_open_price
     cross_under = df['sma_short'].iloc[-2] < day_open_price
     return cross_over, cross_under
