@@ -1,14 +1,13 @@
 import ccxt
 import pandas as pd
 import asyncio
-import nest_asyncio
 import requests
 import config
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram.ext import Application, CommandHandler
 
-interval = '5m' 
+interval = '5m'
 
 # Initialize bybit client
 bybit = ccxt.bybit({
@@ -19,14 +18,13 @@ bybit = ccxt.bybit({
 # Dictionary to store the last alert messages for each symbol
 last_alert_messages = {}
 
-# Store the selected symbols and reset date
+# List of selected symbols from Telegram (global variable)
 selected_symbols = []
-last_reset_date = datetime.now()
 
 # Function to get historical candlestick data
 def get_historical_data(symbol, interval, limit=20):
     ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
-    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'close', 'volume'])
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'close'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
     return df
@@ -59,15 +57,13 @@ def get_previous_day_amplitude(symbol):
     df_daily['timestamp'] = pd.to_datetime(df_daily['timestamp'], unit='ms')
     df_daily.set_index('timestamp', inplace=True)
     
-    # Get the amplitude of the previous day
     prev_day_high = df_daily['high'].iloc[-2]
     prev_day_low = df_daily['low'].iloc[-2]
     
-    # Calculate amplitude ratio (high/low)
     amplitude_ratio = prev_day_high / prev_day_low
     return amplitude_ratio
 
-# Function to send a message to 3commas using a webhook for two different bots and secrets
+# Function to send a message to 3commas using a webhook
 def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
     if last_alert_messages.get(symbol) != action:
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -96,48 +92,29 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
             print(f"Error sending request for {symbol} to bot {bot_uuid}: {e}")
 
 # Telegram bot command to set symbols
-def set_symbols(update: Update, context: CallbackContext) -> None:
+async def set_symbols(update: Update, context) -> None:
     global selected_symbols
-    # Extract symbols from the user's message
     user_symbols = context.args
     if user_symbols:
         selected_symbols = [symbol.upper() for symbol in user_symbols]
-        update.message.reply_text(f"Symbols updated: {', '.join(selected_symbols)}")
+        await update.message.reply_text(f"Symbols updated: {', '.join(selected_symbols)}")
     else:
-        update.message.reply_text("Please provide symbols. Usage: /set_symbols BTC/USDT ETH/USDT")
+        await update.message.reply_text("Please provide symbols. Usage: /set_symbols BTC/USDT ETH/USDT")
 
-# Function to handle unknown commands
-def unknown(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text(f"Sorry, I didn't understand that command.")
-
-# Main function (now defined as async)
+# Main function
 async def main():
-    global selected_symbols, last_reset_date
-    
     while True:
-        # Reset selected symbols every two days
-        if datetime.now() >= last_reset_date + timedelta(days=2):
-            last_reset_date = datetime.now()
-            print(f"Selected symbols reset: {selected_symbols}")
-
         for symbol in selected_symbols:
             try:
-                # Fetch historical data and day open price only once per symbol
                 historical_data = get_historical_data(symbol, interval)
                 day_open_price = get_day_open_price(symbol)
                 cross_over, cross_under = check_sma_crossover_vs_day_open(historical_data, day_open_price)
-
                 close_price = historical_data['close'].iloc[-1]
-
-                # Get amplitude ratio for the previous day
                 amplitude_ratio = get_previous_day_amplitude(symbol)
-
-                # Print the amplitude ratio
+                
                 print(f"Amplitude ratio for {symbol}: {amplitude_ratio}")
-
-                # Check if the amplitude ratio condition is met (minimum 1.1 for 10% change)
+                
                 if amplitude_ratio >= 1.25:
-                    # Determine the action based on SMA crossover compared to day open price
                     if cross_over:
                         send_3commas_message(symbol, "enter_long", close_price, "03b92596-8b5c-4e57-839e-6e980ba0e671", config.SECRET_1)
                         send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_2)
@@ -150,29 +127,21 @@ async def main():
             except Exception as e:
                 print(f"Error processing {symbol}: {e}")
 
-        # Sleep for 5 minutes before checking again
         await asyncio.sleep(300)
 
-# Setup Telegram bot
+# Start Telegram bot
 def start_telegram_bot():
-    updater = Updater(token=8066951467:AAHOaFDL9kixcdwtjbwb-szDgnl8R9Vz8AI, use_context=True)
-    dispatcher = updater.dispatcher
+    application = Application.builder().token(config.TELEGRAM_TOKEN).build()
+    
+    application.add_handler(CommandHandler('set_symbols', set_symbols))
+    
+    application.run_polling()
 
-    # Command to set symbols
-    dispatcher.add_handler(CommandHandler("set_symbols", set_symbols))
-    # Unknown command handler
-    dispatcher.add_handler(CommandHandler("unknown", unknown))
-
-    # Start the bot
-    updater.start_polling()
-
-# Run both Telegram bot and the async trading process
-if __name__ == '__main__':
-    # Start the Telegram bot
-    start_telegram_bot()
-
-    # Use nest_asyncio to allow running asyncio in Jupyter notebooks
+# Run the Telegram bot and the main trading loop concurrently
+if __name__ == "__main__":
+    import nest_asyncio
     nest_asyncio.apply()
-
-    # Create and run the event loop
-    asyncio.run(main())
+    
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, start_telegram_bot)
+    loop.run_until_complete(main())
