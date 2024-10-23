@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from telegram import Update
 from telegram.ext import Application, CommandHandler
 
-interval = '5m'
+interval = '1m'
 
 # Initialize bybit client
 bybit = ccxt.bybit({
@@ -150,7 +150,7 @@ async def main_trading():
             except Exception as e:
                 print(f"Error processing {symbol}: {e}")
 
-        await asyncio.sleep(300)
+        await asyncio.sleep(10)
 
 # Start Telegram bot
 async def start_telegram_bot():
