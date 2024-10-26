@@ -71,7 +71,7 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
             "max_lag": "300",
             "timestamp": timestamp,
             "trigger_price": str(close_price),
-            "tv_exchange": "Bybit",
+            "tv_exchange": "bybit",
             "tv_instrument": symbol.replace('/', '') + '.P',
             "action": action,
             "bot_uuid": bot_uuid
@@ -140,10 +140,10 @@ async def main_trading():
                 if amplitude_ratio >= 1.01:
                     if cross_over:
                         send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_1)
-
+                        #send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_2)
                     elif cross_under:
                         send_3commas_message(symbol, "enter_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_1)
-
+                        #send_3commas_message(symbol, "enter_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_2)
                 else:
                     print(f"Amplitude condition not met for {symbol}, skipping...")
 
