@@ -42,11 +42,11 @@ def get_day_open_price(symbol):
 def calculate_sma(df, period):
     return df['close'].rolling(window=period).mean()
 
-# Function to check SMA crossover against day open price
-def check_sma_crossover_vs_day_open(df, day_open_price, short_period=3):
+# Function to check SMA crossover against day open price with configurable exit percentages
+def check_sma_crossover_vs_day_open(df, day_open_price, short_period=3, cross_over_percentage=1.03, cross_under_percentage=0.97):
     df['sma_short'] = calculate_sma(df, short_period)  # Already returns a Series, so no squeeze needed
-    cross_over = df['sma_short'].iloc[-2] < day_open_price*1.015 and df['sma_short'].iloc[-3] > day_open_price*1.015
-    cross_under = df['sma_short'].iloc[-2] > day_open_price*0.985 and df['sma_short'].iloc[-3] < day_open_price*0.985
+    cross_over = df['sma_short'].iloc[-2] < day_open_price * cross_over_percentage and df['sma_short'].iloc[-3] > day_open_price * cross_over_percentage
+    cross_under = df['sma_short'].iloc[-2] > day_open_price * cross_under_percentage and df['sma_short'].iloc[-3] < day_open_price * cross_under_percentage
     return cross_over, cross_under
 
 # Function to get previous day's amplitude ratio
@@ -131,21 +131,22 @@ async def main_trading():
             try:
                 historical_data = get_historical_data(symbol, interval)
                 day_open_price = get_day_open_price(symbol)
-                cross_over, cross_under = check_sma_crossover_vs_day_open(historical_data, day_open_price)
-                close_price = historical_data['close'].iloc[-1]
-                amplitude_ratio = get_previous_day_amplitude(symbol)
-                
-                print(f"Amplitude ratio for {symbol}: {amplitude_ratio}")
-                
-                if amplitude_ratio >= 1.01:
-                    if cross_over:
-                        send_3commas_message(symbol, "exit_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config2.SECRET_1)
-                        #send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config2.SECRET_2)
-                    elif cross_under:
-                        send_3commas_message(symbol, "exit_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config2.SECRET_1)
-                        #send_3commas_message(symbol, "enter_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config2.SECRET_2)
-                else:
-                    print(f"Amplitude condition not met for {symbol}, skipping...")
+
+                # Check crossovers with different exit percentages
+                for percentage in [1.03, 1.05, 1.07, 1.09]:  # Adjust these as needed
+                    cross_over, cross_under = check_sma_crossover_vs_day_open(historical_data, day_open_price, cross_over_percentage=percentage, cross_under_percentage=1/percentage)
+                    close_price = historical_data['close'].iloc[-1]
+                    amplitude_ratio = get_previous_day_amplitude(symbol)
+                    
+                    print(f"Amplitude ratio for {symbol}: {amplitude_ratio}")
+                    
+                    if amplitude_ratio >= 1.01:
+                        if cross_over:
+                            send_3commas_message(symbol, "exit_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config2.SECRET_1)
+                        elif cross_under:
+                            send_3commas_message(symbol, "exit_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config2.SECRET_1)
+                    else:
+                        print(f"Amplitude condition not met for {symbol}, skipping...")
 
             except Exception as e:
                 print(f"Error processing {symbol}: {e}")
