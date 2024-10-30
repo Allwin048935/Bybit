@@ -148,7 +148,7 @@ async def main_trading():
             except Exception as e:
                 print(f"Error processing {symbol}: {e}")
 
-        await asyncio.sleep(10)
+        await asyncio.sleep(20)
 
 # Start Telegram bot
 async def start_telegram_bot():
