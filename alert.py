@@ -54,7 +54,7 @@ async def main():
 
                 # If amplitude ratio is significant, send an alert
                 if amplitude_ratio >= 1.25:  # Change threshold as needed
-                    message = f'Amplitude ratio for #{symbol} is {amplitude_ratio:.2f}'
+                    message = f'/set_symbols {symbol}'
                     await send_telegram_message(symbol, message)
 
             except Exception as e:
