@@ -2,7 +2,7 @@ import ccxt
 import pandas as pd
 import asyncio
 import requests
-import config
+import config2
 from datetime import datetime, timezone
 from telegram import Update
 from telegram.ext import Application, CommandHandler
@@ -11,8 +11,8 @@ interval = '1m'
 
 # Initialize bybit client
 bybit = ccxt.bybit({
-    'apiKey': config.API_KEY,
-    'secret': config.API_SECRET,
+    'apiKey': config2.API_KEY,
+    'secret': config2.API_SECRET,
 })
 
 # Dictionary to store the last alert messages for each symbol
@@ -76,7 +76,7 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
         }
 
         try:
-            url = config.THREE_COMMAS_WEBHOOK_URL
+            url = config2.THREE_COMMAS_WEBHOOK_URL
             response = requests.post(url, json=payload)
 
             if response.status_code == 200:
@@ -88,15 +88,15 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
         except requests.RequestException as e:
             print(f"Error sending request for {symbol} to bot {bot_uuid}: {e}")
 
-# Updated function to set symbols by matching against config.AVAILABLE_SYMBOLS
+# Updated function to set symbols by matching against config2.AVAILABLE_SYMBOLS
 async def set_symbols(update: Update, context) -> None:
     global selected_symbols
     user_symbols = context.args
 
     if user_symbols:
-        # Convert user input to uppercase and filter only those in config.AVAILABLE_SYMBOLS
-        valid_symbols = [symbol.upper() for symbol in user_symbols if symbol.upper() in config.AVAILABLE_SYMBOLS]
-        invalid_symbols = [symbol.upper() for symbol in user_symbols if symbol.upper() not in config.AVAILABLE_SYMBOLS]
+        # Convert user input to uppercase and filter only those in config2.AVAILABLE_SYMBOLS
+        valid_symbols = [symbol.upper() for symbol in user_symbols if symbol.upper() in config2.AVAILABLE_SYMBOLS]
+        invalid_symbols = [symbol.upper() for symbol in user_symbols if symbol.upper() not in config2.AVAILABLE_SYMBOLS]
 
         # Add valid symbols to the selected_symbols list, avoiding duplicates
         new_symbols = [symbol for symbol in valid_symbols if symbol not in selected_symbols]
@@ -139,9 +139,9 @@ async def main_trading():
                 # Send message if amplitude ratio of either day is >= 1.20
                 if prev_day_amplitude_ratio >= 1.20 or curr_day_amplitude_ratio >= 1.20:
                     if cross_over:
-                        send_3commas_message(symbol, "exit_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_1)
+                        send_3commas_message(symbol, "exit_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config2.SECRET_1)
                     elif cross_under:
-                        send_3commas_message(symbol, "exit_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_1)
+                        send_3commas_message(symbol, "exit_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config2.SECRET_1)
                 else:
                     print(f"Amplitude condition not met for {symbol}, skipping...")
 
@@ -152,7 +152,7 @@ async def main_trading():
 
 # Start Telegram bot
 async def start_telegram_bot():
-    application = Application.builder().token(config.TELEGRAM_TOKEN).build()
+    application = Application.builder().token(config2.TELEGRAM_TOKEN).build()
     
     # Initialize the application (fixes the error)
     await application.initialize()
