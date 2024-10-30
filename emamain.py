@@ -37,8 +37,8 @@ def calculate_ema(df, period):
 def check_ema_crossover(df, short_period=10, long_period=200):
     df['ema_short'] = calculate_ema(df, short_period)
     df['ema_long'] = calculate_ema(df, long_period)
-    cross_over = df['ema_short'].iloc[-2] > df['ema_long'].iloc[-2]
-    cross_under = df['ema_short'].iloc[-2] < df['ema_long'].iloc[-2]
+    cross_over = df['ema_short'].iloc[-2] > df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] <= df['ema_long'].iloc[-3]
+    cross_under = df['ema_short'].iloc[-2] < df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] >= df['ema_long'].iloc[-3]
     return cross_over, cross_under
 
 # Function to get amplitude ratios for previous and current day
@@ -69,7 +69,7 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
             "max_lag": "300",
             "timestamp": timestamp,
             "trigger_price": str(close_price),
-            "tv_exchange": "bybit",
+            "tv_exchange": "Bybit",
             "tv_instrument": symbol.replace('/', '') + '.P',
             "action": action,
             "bot_uuid": bot_uuid
