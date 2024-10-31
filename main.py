@@ -31,7 +31,7 @@ def get_historical_data(symbol, interval, limit=20):
 
 # Function to get day open price
 def get_day_open_price(symbol):
-    day_ohlcv = bybit.fetch_ohlcv(symbol, '1d', limit=3)
+    day_ohlcv = bybit.fetch_ohlcv(symbol, '4h', limit=3)
     df_day = pd.DataFrame(day_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df_day['timestamp'] = pd.to_datetime(df_day['timestamp'], unit='ms')
     df_day.set_index('timestamp', inplace=True)
@@ -51,7 +51,7 @@ def check_sma_crossover_vs_day_open(df, day_open_price, short_period=3):
 
 # Function to get previous day's amplitude ratio
 def get_previous_day_amplitude(symbol):
-    daily_ohlcv = bybit.fetch_ohlcv(symbol, '1d', limit=5)
+    daily_ohlcv = bybit.fetch_ohlcv(symbol, '4h', limit=5)
     df_daily = pd.DataFrame(daily_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df_daily['timestamp'] = pd.to_datetime(df_daily['timestamp'], unit='ms')
     df_daily.set_index('timestamp', inplace=True)
