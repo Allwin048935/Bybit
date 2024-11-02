@@ -45,8 +45,8 @@ def calculate_sma(df, period):
 # Function to check SMA crossover against day open price
 def check_sma_crossover_vs_day_open(df, day_open_price, short_period=3):
     df['sma_short'] = calculate_sma(df, short_period)  # Already returns a Series, so no squeeze needed
-    cross_over = df['sma_short'].iloc[-2] > day_open_price
-    cross_under = df['sma_short'].iloc[-2] < day_open_price
+    cross_over = df['sma_short'].iloc[-2] > day_open_price * 1.0025
+    cross_under = df['sma_short'].iloc[-2] < day_open_price * 0.9975
     return cross_over, cross_under
 
 # Function to get previous day's amplitude ratio
@@ -71,7 +71,7 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
             "max_lag": "300",
             "timestamp": timestamp,
             "trigger_price": str(close_price),
-            "tv_exchange": "bybit",
+            "tv_exchange": "Bybit",
             "tv_instrument": symbol.replace('/', '') + '.P',
             "action": action,
             "bot_uuid": bot_uuid
@@ -137,13 +137,11 @@ async def main_trading():
                 
                 print(f"Amplitude ratio for {symbol}: {amplitude_ratio}")
                 
-                if amplitude_ratio >= 1.20:
+                if amplitude_ratio >= 1.10:
                     if cross_over:
                         send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_1)
-                        #send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_2)
                     elif cross_under:
                         send_3commas_message(symbol, "enter_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_1)
-                        #send_3commas_message(symbol, "enter_short", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_2)
                 else:
                     print(f"Amplitude condition not met for {symbol}, skipping...")
 
