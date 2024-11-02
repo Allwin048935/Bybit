@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from telegram import Update
 from telegram.ext import Application, CommandHandler
 
-interval = '1m'
+interval = '1s'
 
 # Initialize bybit client
 bybit = ccxt.bybit({
@@ -22,7 +22,7 @@ last_alert_messages = {}
 selected_symbols = []
 
 # Function to get historical candlestick data
-def get_historical_data(symbol, interval, limit=20):
+def get_historical_data(symbol, interval, limit=200):
     ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -51,7 +51,7 @@ def check_sma_crossover_vs_day_open(df, day_open_price, short_period=3):
 
 # Function to get previous day's amplitude ratio
 def get_previous_day_amplitude(symbol):
-    daily_ohlcv = bybit.fetch_ohlcv(symbol, '4h', limit=5)
+    daily_ohlcv = bybit.fetch_ohlcv(symbol, '4h', limit=3)
     df_daily = pd.DataFrame(daily_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df_daily['timestamp'] = pd.to_datetime(df_daily['timestamp'], unit='ms')
     df_daily.set_index('timestamp', inplace=True)
