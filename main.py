@@ -3,7 +3,7 @@ import pandas as pd
 import asyncio
 import requests
 import config
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler
 
@@ -21,6 +21,9 @@ last_alert_messages = {}
 # List of selected symbols from Telegram (global variable)
 selected_symbols = []
 
+# Variable to store the last reset time for symbols based on 4h BTC/USDT candle
+last_reset_time = None
+
 # Function to get historical candlestick data
 def get_historical_data(symbol, interval, limit=200):
     ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
@@ -28,6 +31,18 @@ def get_historical_data(symbol, interval, limit=200):
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
     return df
+
+# Function to check if a new 4h BTC/USDT candle has formed
+def is_new_4h_candle():
+    global last_reset_time
+    ohlcv = bybit.fetch_ohlcv('BTC/USDT', '4h', limit=1)
+    latest_candle_time = pd.to_datetime(ohlcv[-1][0], unit='ms')
+
+    # Reset if there is a new candle
+    if last_reset_time is None or latest_candle_time > last_reset_time:
+        last_reset_time = latest_candle_time
+        return True
+    return False
 
 # Function to get day open price
 def get_day_open_price(symbol):
@@ -45,8 +60,8 @@ def calculate_sma(df, period):
 # Function to check SMA crossover against day open price
 def check_sma_crossover_vs_day_open(df, day_open_price, short_period=3):
     df['sma_short'] = calculate_sma(df, short_period)
-    cross_over = df['sma_short'].iloc[-2] > day_open_price*1.0025
-    cross_under = df['sma_short'].iloc[-2] < day_open_price*0.9975
+    cross_over = df['sma_short'].iloc[-2] > day_open_price * 1.0025
+    cross_under = df['sma_short'].iloc[-2] < day_open_price * 0.9975
     return cross_over, cross_under
 
 # Function to get previous day's amplitude ratio
@@ -118,26 +133,16 @@ async def set_symbols(update: Update, context) -> None:
     else:
         await update.message.reply_text("No symbols provided. Usage: /set_symbols BTC/USDT ETH/USDT")
 
-# Command to reset symbols
-async def reset_symbols(update: Update, context) -> None:
-    global selected_symbols
-    selected_symbols = []
-    await update.message.reply_text("Symbols have been reset.")
-
-# Periodic reset of symbols every 4 hours
-async def reset_symbols_periodically(application):
-    global selected_symbols
-    while True:
-        await asyncio.sleep(4 * 60 * 60)  # 4 hours in seconds
-        selected_symbols = []
-        
-        # Send a message to the chat informing users about the reset
-        for chat_id in config.CHAT_IDS:  # Ensure `CHAT_IDS` contains the IDs of chats to receive notifications
-            await application.bot.send_message(chat_id=chat_id, text="Symbols have been reset automatically.")
-
 # Main trading function
 async def main_trading():
+    global selected_symbols
+
     while True:
+        # Check if a new 4h BTC/USDT candle has formed and reset symbols if true
+        if is_new_4h_candle():
+            selected_symbols = []
+            print("New 4h BTC/USDT candle detected. Resetting selected symbols.")
+
         for symbol in selected_symbols:
             try:
                 historical_data = get_historical_data(symbol, interval)
@@ -173,9 +178,6 @@ async def start_telegram_bot():
 
     await application.start()
     await application.updater.start_polling()
-
-    # Start the periodic reset task
-    asyncio.create_task(reset_symbols_periodically(application))
 
 # Main function to run both bot and trading
 async def main():
