@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from telegram import Update
 from telegram.ext import Application, CommandHandler
 
-interval = '1m'
+interval = '1s'
 
 # Initialize bybit client
 bybit = ccxt.bybit({
@@ -22,7 +22,7 @@ last_alert_messages = {}
 selected_symbols = []
 
 # Function to get historical candlestick data
-def get_historical_data(symbol, interval, limit=20):
+def get_historical_data(symbol, interval, limit=200):
     ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -31,7 +31,7 @@ def get_historical_data(symbol, interval, limit=20):
 
 # Function to get day open price
 def get_day_open_price(symbol):
-    day_ohlcv = bybit.fetch_ohlcv(symbol, '1d', limit=3)
+    day_ohlcv = bybit.fetch_ohlcv(symbol, '4h', limit=3)
     df_day = pd.DataFrame(day_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df_day['timestamp'] = pd.to_datetime(df_day['timestamp'], unit='ms')
     df_day.set_index('timestamp', inplace=True)
@@ -45,13 +45,13 @@ def calculate_sma(df, period):
 # Function to check SMA crossover against day open price with configurable exit percentages
 def check_sma_crossover_vs_day_open(df, day_open_price, short_period=3, cross_over_percentage=1.03, cross_under_percentage=0.97):
     df['sma_short'] = calculate_sma(df, short_period)  # Already returns a Series, so no squeeze needed
-    cross_over = df['sma_short'].iloc[-2] < day_open_price * cross_over_percentage and df['sma_short'].iloc[-3] > day_open_price * cross_over_percentage
-    cross_under = df['sma_short'].iloc[-2] > day_open_price * cross_under_percentage and df['sma_short'].iloc[-3] < day_open_price * cross_under_percentage
+    cross_over = df['sma_short'].iloc[-2] < day_open_price and df['sma_short'].iloc[-3] > day_open_price #cross_over_percentage and df['sma_short'].iloc[-3] > day_open_price * cross_over_percentage
+    cross_under = df['sma_short'].iloc[-2] > day_open_price and df['sma_short'].iloc[-3] < day_open_price #cross_under_percentage and df['sma_short'].iloc[-3] < day_open_price * cross_under_percentage
     return cross_over, cross_under
 
 # Function to get previous day's amplitude ratio
 def get_previous_day_amplitude(symbol):
-    daily_ohlcv = bybit.fetch_ohlcv(symbol, '1d', limit=5)
+    daily_ohlcv = bybit.fetch_ohlcv(symbol, '4h', limit=5)
     df_daily = pd.DataFrame(daily_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df_daily['timestamp'] = pd.to_datetime(df_daily['timestamp'], unit='ms')
     df_daily.set_index('timestamp', inplace=True)
@@ -68,10 +68,10 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
         timestamp = datetime.now(timezone.utc).isoformat()
         payload = {
             "secret": secret,
-            "max_lag": "300",
+            "max_lag": "60",
             "timestamp": timestamp,
             "trigger_price": str(close_price),
-            "tv_exchange": "Bybit",
+            "tv_exchange": "bybit",
             "tv_instrument": symbol.replace('/', '') + '.P',
             "action": action,
             "bot_uuid": bot_uuid
@@ -140,7 +140,7 @@ async def main_trading():
                     
                     print(f"Amplitude ratio for {symbol}: {amplitude_ratio}")
                     
-                    if amplitude_ratio >= 1.01:
+                    if amplitude_ratio >= 1.05:
                         if cross_over:
                             send_3commas_message(symbol, "exit_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config2.SECRET_1)
                         elif cross_under:
