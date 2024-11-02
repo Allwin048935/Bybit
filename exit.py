@@ -140,7 +140,7 @@ async def main_trading():
                     
                     print(f"Amplitude ratio for {symbol}: {amplitude_ratio}")
                     
-                    if amplitude_ratio >= 1.05:
+                    if amplitude_ratio >= 1.01:
                         if cross_over:
                             send_3commas_message(symbol, "exit_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config2.SECRET_1)
                         elif cross_under:
