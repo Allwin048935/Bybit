@@ -35,7 +35,7 @@ def get_historical_data(symbol, interval, limit=200):
 # Function to check if a new 4h BTC/USDT candle has formed
 def is_new_4h_candle():
     global last_reset_time
-    ohlcv = bybit.fetch_ohlcv('BTC/USDT', '4h', limit=1)
+    ohlcv = bybit.fetch_ohlcv('BTC/USDT', '5m', limit=1)
     latest_candle_time = pd.to_datetime(ohlcv[-1][0], unit='ms')
 
     # Reset if there is a new candle
