@@ -44,9 +44,9 @@ def calculate_sma(df, period):
 
 # Function to check SMA crossover against day open price
 def check_sma_crossover_vs_day_open(df, day_open_price, short_period=3):
-    df['sma_short'] = calculate_sma(df, short_period)  # Already returns a Series, so no squeeze needed
-    cross_over = df['sma_short'].iloc[-2] > day_open_price * 1.0025
-    cross_under = df['sma_short'].iloc[-2] < day_open_price * 0.9975
+    df['sma_short'] = calculate_sma(df, short_period)
+    cross_over = df['sma_short'].iloc[-2] > day_open_price*1.0025
+    cross_under = df['sma_short'].iloc[-2] < day_open_price*0.9975
     return cross_over, cross_under
 
 # Function to get previous day's amplitude ratio
@@ -71,7 +71,7 @@ def send_3commas_message(symbol, action, close_price, bot_uuid, secret):
             "max_lag": "300",
             "timestamp": timestamp,
             "trigger_price": str(close_price),
-            "tv_exchange": "Bybit",
+            "tv_exchange": "bybit",
             "tv_instrument": symbol.replace('/', '') + '.P',
             "action": action,
             "bot_uuid": bot_uuid
@@ -124,6 +124,17 @@ async def reset_symbols(update: Update, context) -> None:
     selected_symbols = []
     await update.message.reply_text("Symbols have been reset.")
 
+# Periodic reset of symbols every 4 hours
+async def reset_symbols_periodically(application):
+    global selected_symbols
+    while True:
+        await asyncio.sleep(4 * 60 * 60)  # 4 hours in seconds
+        selected_symbols = []
+        
+        # Send a message to the chat informing users about the reset
+        for chat_id in config.CHAT_IDS:  # Ensure `CHAT_IDS` contains the IDs of chats to receive notifications
+            await application.bot.send_message(chat_id=chat_id, text="Symbols have been reset automatically.")
+
 # Main trading function
 async def main_trading():
     while True:
@@ -137,7 +148,7 @@ async def main_trading():
                 
                 print(f"Amplitude ratio for {symbol}: {amplitude_ratio}")
                 
-                if amplitude_ratio >= 1.10:
+                if amplitude_ratio >= 1.20:
                     if cross_over:
                         send_3commas_message(symbol, "enter_long", close_price, "00830f96-c475-4c3e-9e38-9a4495e3b78c", config.SECRET_1)
                     elif cross_under:
@@ -154,7 +165,7 @@ async def main_trading():
 async def start_telegram_bot():
     application = Application.builder().token(config.TELEGRAM_TOKEN).build()
     
-    # Initialize the application (fixes the error)
+    # Initialize the application
     await application.initialize()
 
     application.add_handler(CommandHandler('set_symbols', set_symbols))
@@ -162,6 +173,9 @@ async def start_telegram_bot():
 
     await application.start()
     await application.updater.start_polling()
+
+    # Start the periodic reset task
+    asyncio.create_task(reset_symbols_periodically(application))
 
 # Main function to run both bot and trading
 async def main():
