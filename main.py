@@ -21,28 +21,13 @@ last_alert_messages = {}
 # List of selected symbols from Telegram (global variable)
 selected_symbols = []
 
-# Variable to store the last reset time for symbols based on 4h BTC/USDT candle
-last_reset_time = None
-
 # Function to get historical candlestick data
-def get_historical_data(symbol, interval, limit=200):
+def get_historical_data(symbol, interval, limit=20):
     ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
     return df
-
-# Function to check if a new 4h BTC/USDT candle has formed
-def is_new_4h_candle():
-    global last_reset_time
-    ohlcv = bybit.fetch_ohlcv('BTC/USDT', '4h', limit=1)
-    latest_candle_time = pd.to_datetime(ohlcv[-1][0], unit='ms')
-
-    # Reset if there is a new candle
-    if last_reset_time is None or latest_candle_time > last_reset_time:
-        last_reset_time = latest_candle_time
-        return True
-    return False
 
 # Function to get day open price
 def get_day_open_price(symbol):
@@ -59,14 +44,14 @@ def calculate_sma(df, period):
 
 # Function to check SMA crossover against day open price
 def check_sma_crossover_vs_day_open(df, day_open_price, short_period=3):
-    df['sma_short'] = calculate_sma(df, short_period)
-    cross_over = df['sma_short'].iloc[-2] > day_open_price * 1.0025
-    cross_under = df['sma_short'].iloc[-2] < day_open_price * 0.9975
+    df['sma_short'] = calculate_sma(df, short_period)  # Already returns a Series, so no squeeze needed
+    cross_over = df['sma_short'].iloc[-2] > day_open_price
+    cross_under = df['sma_short'].iloc[-2] < day_open_price
     return cross_over, cross_under
 
 # Function to get previous day's amplitude ratio
 def get_previous_day_amplitude(symbol):
-    daily_ohlcv = bybit.fetch_ohlcv(symbol, '4h', limit=3)
+    daily_ohlcv = bybit.fetch_ohlcv(symbol, '4h', limit=5)
     df_daily = pd.DataFrame(daily_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df_daily['timestamp'] = pd.to_datetime(df_daily['timestamp'], unit='ms')
     df_daily.set_index('timestamp', inplace=True)
@@ -141,14 +126,7 @@ async def reset_symbols(update: Update, context) -> None:
 
 # Main trading function
 async def main_trading():
-    global selected_symbols
-
     while True:
-        # Check if a new 4h BTC/USDT candle has formed and reset symbols if true
-        if is_new_4h_candle():
-            selected_symbols = []
-            print("New 4h BTC/USDT candle detected. Resetting selected symbols.")
-
         for symbol in selected_symbols:
             try:
                 historical_data = get_historical_data(symbol, interval)
@@ -176,11 +154,11 @@ async def main_trading():
 async def start_telegram_bot():
     application = Application.builder().token(config.TELEGRAM_TOKEN).build()
     
-    # Initialize the application
+    # Initialize the application (fixes the error)
     await application.initialize()
 
     application.add_handler(CommandHandler('set_symbols', set_symbols))
-    application.add_handler(CommandHandler('reset_symbols', reset_symbols))  # Add the reset_symbols handler
+    application.add_handler(CommandHandler('reset_symbols', reset_symbols))
 
     await application.start()
     await application.updater.start_polling()
