@@ -3,7 +3,7 @@ import pandas as pd
 import asyncio
 import requests
 import config
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from telegram import Update
 from telegram.ext import Application, CommandHandler
 
@@ -133,6 +133,12 @@ async def set_symbols(update: Update, context) -> None:
     else:
         await update.message.reply_text("No symbols provided. Usage: /set_symbols BTC/USDT ETH/USDT")
 
+# Command to reset symbols
+async def reset_symbols(update: Update, context) -> None:
+    global selected_symbols
+    selected_symbols = []
+    await update.message.reply_text("Symbols have been reset.")
+
 # Main trading function
 async def main_trading():
     global selected_symbols
@@ -174,7 +180,7 @@ async def start_telegram_bot():
     await application.initialize()
 
     application.add_handler(CommandHandler('set_symbols', set_symbols))
-    application.add_handler(CommandHandler('reset_symbols', reset_symbols))
+    application.add_handler(CommandHandler('reset_symbols', reset_symbols))  # Add the reset_symbols handler
 
     await application.start()
     await application.updater.start_polling()
