@@ -52,11 +52,11 @@ def plot_candles(df, symbol, title):
                            returnfig=True)
 
     # Add Title with a more commonly available font
-    axlist[0].set_title(f"{symbol} - {title}", fontsize=25, style='italic', fontfamily='sans-serif')  # Changed fontfamily
+    axlist[0].set_title(f"{symbol} - {title}", fontsize=25, style='italic', fontfamily='sans-serif')
 
     # Adjust layout and save plot to a BytesIO object (removed plt.tight_layout)
     buf = BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight')  # Added bbox_inches='tight'
+    plt.savefig(buf, format='png', bbox_inches='tight')
     buf.seek(0)
 
     # Close the figure to avoid memory overflow
@@ -89,7 +89,8 @@ async def main():
                 amplitude_ratio = latest_candle['High'] / latest_candle['Low']
                 
                 if amplitude_ratio >= 1.1:
-                    message = f'/set_symbols {symbol}'
+                    # Include amplitude ratio in the message
+                    message = f'/set_symbols {symbol} {amplitude_ratio:.2f}'
                     title = f'Amplitude Alert for {symbol}'
                     # Plot and get image buffer
                     image_buffer = plot_candles(historical_data, symbol, title)
