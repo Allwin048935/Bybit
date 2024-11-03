@@ -6,14 +6,14 @@ from io import BytesIO
 import asyncio
 import nest_asyncio
 from telegram import Bot
-import config  # Import the config module
+import config4  # Import the config module
 
 interval = '4h'  # 4-hour candlesticks
 
 # Initialize Bybit client
 bybit = ccxt.bybit({
-    'apiKey': config.API_KEY,
-    'secret': config.API_SECRET,
+    'apiKey': config4.API_KEY,
+    'secret': config4.API_SECRET,
 })
 
 # Dictionary to store the last alert messages for each symbol
@@ -69,9 +69,9 @@ async def send_telegram_message(symbol, message, image_buffer):
     # Check if the current message is the same as the previous one for this symbol
     if last_alert_messages.get(symbol) != message:
         try:
-            await telegram_bot.send_message(chat_id=config.CHAT_ID, text=message)
+            await telegram_bot.send_message(chat_id=config4.CHAT_ID, text=message)
             # Send image
-            await telegram_bot.send_photo(chat_id=config.CHAT_ID, photo=image_buffer)
+            await telegram_bot.send_photo(chat_id=config4.CHAT_ID, photo=image_buffer)
             # Update the last alert message for this symbol
             last_alert_messages[symbol] = message
         except Exception as e:
@@ -80,7 +80,7 @@ async def send_telegram_message(symbol, message, image_buffer):
 # Main function (now defined as async)
 async def main():
     while True:
-        for symbol in config.SELECTED_SYMBOLS:
+        for symbol in config4.SELECTED_SYMBOLS:
             try:
                 historical_data = get_historical_data(symbol, interval)
                 
@@ -102,7 +102,7 @@ async def main():
         await asyncio.sleep(300)  # Adjust the sleep duration as needed
 
 # Initialize Telegram Bot
-telegram_bot = Bot(token=config.TELEGRAM_TOKEN)
+telegram_bot = Bot(token=config4.TELEGRAM_TOKEN)
 
 # Use nest_asyncio to allow running asyncio in Jupyter notebooks
 nest_asyncio.apply()
