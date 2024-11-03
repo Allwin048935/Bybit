@@ -88,8 +88,8 @@ async def main():
                 latest_candle = historical_data.iloc[-1]
                 amplitude_ratio = latest_candle['High'] / latest_candle['Low']
                 
-                if amplitude_ratio > 1.1:
-                    message = f'Amplitude ratio > 1.1 detected on #{symbol}'
+                if amplitude_ratio >= 1.1:
+                    message = f'/set_symbols {symbol}'
                     title = f'Amplitude Alert for {symbol}'
                     # Plot and get image buffer
                     image_buffer = plot_candles(historical_data, symbol, title)
@@ -99,7 +99,7 @@ async def main():
                 print(f"Error processing {symbol}: {e}")
 
         # Sleep for a specified interval before checking again
-        await asyncio.sleep(300)  # Adjust the sleep duration as needed
+        await asyncio.sleep(900)  # Adjust the sleep duration as needed
 
 # Initialize Telegram Bot
 telegram_bot = Bot(token=config4.TELEGRAM_TOKEN)
