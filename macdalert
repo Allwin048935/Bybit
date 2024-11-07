@@ -1,0 +1,167 @@
+import ccxt
+import pandas as pd
+import matplotlib.pyplot as plt
+import mplfinance as mpf
+from io import BytesIO
+import asyncio
+import nest_asyncio
+from telegram import Bot
+import bybitconfig  # Import the bybitconfig module (assuming similar config as Bitget)
+import ta  # Import ta library
+
+interval = '1d'  # Adjust to '4h' if you need 4-hour candlesticks
+
+# Initialize Bybit client
+bybit = ccxt.bybit({
+    'apiKey': bybitconfig.API_KEY,
+    'secret': bybitconfig.API_SECRET,
+})
+
+# Dictionary to store the last alert messages for each symbol
+last_alert_messages = {}
+
+# Function to get historical candlestick data
+def get_historical_data(symbol, interval, limit=50):
+    ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
+    
+    # Rename columns to match mplfinance format
+    df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+    return df
+
+# Function to calculate EMA using ta library
+def calculate_ema(df, period):
+    return ta.trend.EMAIndicator(df['Close'], window=period).ema_indicator()
+
+# Function to calculate MACD using ta library
+def calculate_macd(df):
+    macd = ta.trend.MACD(df['Close'])
+    df['macd'] = macd.macd()
+    df['signal'] = macd.macd_signal()
+    df['histogram'] = macd.macd_diff()
+
+# Function to check MACD cross
+def check_macd_cross(df):
+    if 'histogram' not in df:
+        return False, False
+    
+    histogram_prev = df['histogram'].iloc[-3]
+    histogram_curr = df['histogram'].iloc[-2]
+
+    cross_over = histogram_curr > histogram_prev
+    cross_under = histogram_prev > histogram_curr
+
+    return cross_over, cross_under
+
+# Function to check EMA cross
+def check_ema_cross(df, short_period=3, long_period=7):
+    df['ema_short'] = calculate_ema(df, short_period)
+    df['ema_long'] = calculate_ema(df, long_period)
+
+    cross_over = df['ema_short'].iloc[-2] > df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] <= df['ema_long'].iloc[-3]
+    cross_under = df['ema_short'].iloc[-2] < df['ema_long'].iloc[-2] and df['ema_short'].iloc[-3] >= df['ema_long'].iloc[-3]
+
+    return cross_over, cross_under
+
+# Updated function to plot candlesticks with EMA lines and MACD Histogram
+def plot_candles(df, symbol, title):
+    mpf_data = df[['Open', 'High', 'Low', 'Close']].copy()
+    
+    # Create custom market colors for up and down candlesticks
+    mc = mpf.make_marketcolors(up='#2fc71e', down='#ed2f1a', inherit=True)
+
+    # Create a custom style using the market colors and other style settings
+    s = mpf.make_mpf_style(base_mpl_style=['bmh', 'dark_background'], marketcolors=mc, y_on_right=True)
+
+    # Add EMA lines and MACD Histogram to the plot
+    short_ema = calculate_ema(df, 3)
+    long_ema = calculate_ema(df, 7)
+    calculate_macd(df)  # Calculate MACD values for plotting
+
+    # Set dynamic colors for the MACD histogram based on the comparison with the previous value
+    macd_colors = [
+        'green' if df['histogram'].iloc[i] > df['histogram'].iloc[i - 1] else 'red'
+        for i in range(1, len(df['histogram']))
+    ]
+    # The first histogram bar doesn't have a previous bar, so we add a neutral color for it
+    macd_colors.insert(0, 'gray')
+
+    # Plot figure with custom ratio and return it for further customization
+    fig, axlist = mpf.plot(
+        mpf_data,
+        figratio=(10, 6),
+        type="candle",
+        style=s,
+        tight_layout=True,
+        datetime_format='%H:%M',
+        ylabel="Price ($)",
+        addplot=[
+            mpf.make_addplot(short_ema, color='cyan', width=1.5, linestyle='-'),
+            mpf.make_addplot(long_ema, color='magenta', width=1.5, linestyle='-'),
+            mpf.make_addplot(df['histogram'], type='bar', color=macd_colors, panel=1, ylabel="MACD Histogram")
+        ],
+        returnfig=True
+    )
+
+    # Add Title
+    axlist[0].set_title(f"{symbol} - {title}", fontsize=25, style='italic', fontfamily='sans-serif')
+
+    # Save plot to a BytesIO object
+    buf = BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight')
+    buf.seek(0)
+
+    # Close the figure to avoid memory overflow
+    plt.close(fig)
+
+    return buf
+
+# Function to send Telegram message and image
+async def send_telegram_message(symbol, message, image_buffer):
+    if last_alert_messages.get(symbol) != message:
+        await telegram_bot.send_message(chat_id=bybitconfig.CHAT_ID, text=message)
+        await telegram_bot.send_photo(chat_id=bybitconfig.CHAT_ID, photo=image_buffer)
+        last_alert_messages[symbol] = message
+
+# Main function
+async def main():
+    while True:
+        for symbol in bybitconfig.SELECTED_SYMBOLS:
+            try:
+                # Fetch historical data
+                historical_data = get_historical_data(symbol, interval)
+                
+                # Calculate MACD to ensure columns are available
+                calculate_macd(historical_data)
+                
+                # Check MACD and EMA crossovers
+                cross_over, cross_under = check_macd_cross(historical_data)
+                ema_cross_over, ema_cross_under = check_ema_cross(historical_data)
+
+                # MACD cross events
+                if cross_over:
+                    message = f'MACD Cross over detected on #{symbol}'
+                    title = f'MACD Cross Over for {symbol}'
+                    image_buffer = plot_candles(historical_data, symbol, title)
+                    await send_telegram_message(symbol, message, image_buffer)
+                elif cross_under:
+                    message = f'MACD Cross under detected on #{symbol}'
+                    title = f'MACD Cross Under for {symbol}'
+                    image_buffer = plot_candles(historical_data, symbol, title)
+                    await send_telegram_message(symbol, message, image_buffer)
+
+            except Exception as e:
+                print(f"Error processing {symbol}: {e}")
+
+        await asyncio.sleep(300)  # Sleep duration as needed
+
+# Initialize Telegram Bot
+telegram_bot = Bot(token=bybitconfig.TELEGRAM_TOKEN)
+
+# Use nest_asyncio for Jupyter compatibility
+nest_asyncio.apply()
+
+# Create and run the event loop
+asyncio.run(main())
