@@ -1,0 +1,157 @@
+import ccxt
+import pandas as pd
+import asyncio
+from datetime import datetime, timezone
+from telegram import Update
+from telegram.ext import Application, CommandHandler
+import config  # Configuration file for API keys and tokens
+
+interval = '1s'
+
+# Initialize bybit client with credentials from config
+bybit = ccxt.bybit({
+    'apiKey': config.API_KEY,
+    'secret': config.API_SECRET,
+})
+
+# Dictionary to store the last alert messages
+last_alert_messages = {}
+
+# List of selected symbols from Telegram (global variable)
+selected_symbols = []
+
+# Fetch all tradable symbols from the exchange
+def fetch_all_symbols():
+    try:
+        markets = bybit.load_markets()
+        return [market for market in markets if markets[market]['type'] == 'spot']
+    except Exception as e:
+        print(f"Error fetching symbols: {e}")
+        return []
+
+# Function to get historical candlestick data
+def get_historical_data(symbol, interval, limit=20):
+    ohlcv = bybit.fetch_ohlcv(symbol, interval, limit=limit)
+    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
+    return df
+
+# Function to get day open price
+def get_day_open_price(symbol):
+    day_ohlcv = bybit.fetch_ohlcv(symbol, '4h', limit=3)
+    df_day = pd.DataFrame(day_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df_day['timestamp'] = pd.to_datetime(df_day['timestamp'], unit='ms')
+    df_day.set_index('timestamp', inplace=True)
+    day_open_price = df_day['close'].iloc[-2]
+    return day_open_price
+
+# Function to calculate SMA
+def calculate_sma(df, period):
+    return df['close'].rolling(window=period).mean()
+
+# Function to check SMA crossover against day open price
+def check_sma_crossover_vs_day_open(df, day_open_price, short_period=3):
+    df['sma_short'] = calculate_sma(df, short_period)
+    cross_over = df['sma_short'].iloc[-2] > day_open_price
+    cross_under = df['sma_short'].iloc[-2] < day_open_price
+    return cross_over, cross_under
+
+# Function to get previous day's amplitude ratio
+def get_previous_day_amplitude(symbol):
+    daily_ohlcv = bybit.fetch_ohlcv(symbol, '4h', limit=5)
+    df_daily = pd.DataFrame(daily_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df_daily['timestamp'] = pd.to_datetime(df_daily['timestamp'], unit='ms')
+    df_daily.set_index('timestamp', inplace=True)
+    
+    prev_day_high = df_daily['high'].iloc[-2]
+    prev_day_low = df_daily['low'].iloc[-2]
+    
+    amplitude_ratio = prev_day_high / prev_day_low
+    return amplitude_ratio
+
+# Function to execute a buy or sell trade on the spot market
+def execute_trade(symbol, action, close_price, usdt_amount=10):
+    try:
+        # Calculate the quantity based on the USDT amount and close price
+        quantity = usdt_amount / close_price
+
+        if action == "buy":
+            order = bybit.create_market_buy_order(symbol, quantity)
+        elif action == "sell":
+            order = bybit.create_market_sell_order(symbol, quantity)
+        else:
+            print(f"Invalid action: {action}")
+            return
+        print(f"Successfully executed {action} order for {symbol}: {order}")
+    except Exception as e:
+        print(f"Error executing {action} order for {symbol}: {e}")
+
+# Updated function to set symbols by fetching from the exchange
+async def set_symbols(update: Update, context) -> None:
+    global selected_symbols
+    all_symbols = fetch_all_symbols()
+
+    if all_symbols:
+        selected_symbols = all_symbols
+        response_message = f"Symbols updated with all available symbols from the exchange. Total: {len(selected_symbols)}"
+    else:
+        response_message = "Failed to fetch symbols from the exchange."
+
+    await update.message.reply_text(response_message)
+
+# Command to reset symbols and last alert messages
+async def reset_symbols(update: Update, context) -> None:
+    global selected_symbols, last_alert_messages
+    selected_symbols = []
+    last_alert_messages.clear()  # Clear last alert messages
+    await update.message.reply_text("Symbols and last alert messages have been reset.")
+
+# Main trading function
+async def main_trading():
+    while True:
+        for symbol in selected_symbols:
+            try:
+                historical_data = get_historical_data(symbol, interval)
+                day_open_price = get_day_open_price(symbol)
+                cross_over, cross_under = check_sma_crossover_vs_day_open(historical_data, day_open_price)
+                close_price = historical_data['close'].iloc[-1]
+                amplitude_ratio = get_previous_day_amplitude(symbol)
+
+                if amplitude_ratio >= 1.10:
+                    if cross_over:
+                        execute_trade(symbol, "buy", close_price, usdt_amount=10)
+                    elif cross_under:
+                        execute_trade(symbol, "sell", close_price, usdt_amount=10)
+                else:
+                    print(f"Amplitude condition not met for {symbol}, skipping...")
+
+            except Exception as e:
+                print(f"Error processing {symbol}: {e}")
+
+        await asyncio.sleep(10)
+
+# Start Telegram bot
+async def start_telegram_bot():
+    application = Application.builder().token(config.TELEGRAM_TOKEN).build()
+    
+    await application.initialize()
+    application.add_handler(CommandHandler('set_symbols', set_symbols))
+    application.add_handler(CommandHandler('reset_symbols', reset_symbols))
+
+    await application.start()
+    await application.updater.start_polling()
+
+# Main function to run both bot and trading
+async def main():
+    await asyncio.gather(
+        start_telegram_bot(),
+        main_trading()
+    )
+
+# Run the main function
+if __name__ == "__main__":
+    import nest_asyncio
+    nest_asyncio.apply()
+
+    asyncio.run(main())
