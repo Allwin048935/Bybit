@@ -6,7 +6,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler
 import config  # Configuration file for API keys and tokens
 
-interval = '1s'
+interval = '1m'
 
 # Initialize bybit client with credentials from config
 bybit = ccxt.bybit({
