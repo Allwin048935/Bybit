@@ -4,11 +4,11 @@ import asyncio
 from datetime import datetime, timezone
 from telegram import Update
 from telegram.ext import Application, CommandHandler
-import config  # Configuration file for API keys and tokens
+import config
 
 interval = '1m'
 
-# Initialize bybit client with credentials from config
+# Initialize Bybit client
 bybit = ccxt.bybit({
     'apiKey': config.API_KEY,
     'secret': config.API_SECRET,
@@ -20,13 +20,13 @@ last_alert_messages = {}
 # List of selected symbols from Telegram (global variable)
 selected_symbols = []
 
-# Fetch all tradable symbols from the exchange
-def fetch_all_symbols():
+# Function to fetch all available symbols from the exchange
+def get_all_symbols():
     try:
         markets = bybit.load_markets()
-        return [market for market in markets if markets[market]['type'] == 'spot']
+        return [market for market in markets.keys() if '/' in market]  # Include only trading pairs
     except Exception as e:
-        print(f"Error fetching symbols: {e}")
+        print(f"Error fetching available symbols: {e}")
         return []
 
 # Function to get historical candlestick data
@@ -87,18 +87,31 @@ def execute_trade(symbol, action, close_price, usdt_amount=10):
     except Exception as e:
         print(f"Error executing {action} order for {symbol}: {e}")
 
-# Updated function to set symbols by fetching from the exchange
+# Updated function to set symbols based on exchange-provided symbols
 async def set_symbols(update: Update, context) -> None:
     global selected_symbols
-    all_symbols = fetch_all_symbols()
+    user_symbols = context.args
 
-    if all_symbols:
-        selected_symbols = all_symbols
-        response_message = f"Symbols updated with all available symbols from the exchange. Total: {len(selected_symbols)}"
+    available_symbols = get_all_symbols()  # Get symbols from the exchange
+
+    if user_symbols:
+        valid_symbols = [symbol.upper() for symbol in user_symbols if symbol.upper() in available_symbols]
+        invalid_symbols = [symbol.upper() for symbol in user_symbols if symbol.upper() not in available_symbols]
+
+        new_symbols = [symbol for symbol in valid_symbols if symbol not in selected_symbols]
+        selected_symbols.extend(new_symbols)
+
+        response_message = ""
+        if new_symbols:
+            response_message += f"Symbols updated: {', '.join(selected_symbols)}\n"
+        if invalid_symbols:
+            response_message += f"Invalid symbols (not available): {', '.join(invalid_symbols)}"
+        if not new_symbols and not invalid_symbols:
+            response_message = "All provided symbols are already in the list."
+
+        await update.message.reply_text(response_message)
     else:
-        response_message = "Failed to fetch symbols from the exchange."
-
-    await update.message.reply_text(response_message)
+        await update.message.reply_text("No symbols provided. Usage: /set_symbols BTC/USDT ETH/USDT")
 
 # Command to reset symbols and last alert messages
 async def reset_symbols(update: Update, context) -> None:
