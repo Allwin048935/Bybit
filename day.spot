@@ -132,10 +132,12 @@ async def main_trading():
                 amplitude_ratio = get_previous_day_amplitude(symbol)
 
                 if amplitude_ratio >= 1.10:
-                    if cross_over:
+                    if cross_over and last_alert_messages.get(symbol) != "buy":
                         execute_trade(symbol, "buy", close_price, usdt_amount=10)
-                    elif cross_under:
+                        last_alert_messages[symbol] = "buy"
+                    elif cross_under and last_alert_messages.get(symbol) != "sell":
                         execute_trade(symbol, "sell", close_price, usdt_amount=10)
+                        last_alert_messages[symbol] = "sell"
                 else:
                     print(f"Amplitude condition not met for {symbol}, skipping...")
 
